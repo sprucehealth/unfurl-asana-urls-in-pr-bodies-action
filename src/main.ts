@@ -5,41 +5,6 @@ import * as asana from 'asana';
 import { getAsanaTaskGIDsFromText } from './getAsanaTaskGIDsFromText';
 
 /**
- * Find plain Asana URLs that are not part of markdown links
- * @param text Text to search for Asana URLs
- * @returns Array of plain Asana URLs
- */
-function findPlainAsanaUrls(text: string): string[] {
-  core.debug('Finding plain Asana URLs (not in markdown links)');
-
-  // URLs that might be part of markdown links
-  const markdownLinkRegex = /\[([^\]]*)\][(](https:\/\/app\.asana\.com\/[^)]+)[)]/g;
-  const markdownUrls = new Set<string>();
-
-  let match;
-  while ((match = markdownLinkRegex.exec(text)) !== null) {
-    markdownUrls.add(match[2]); // Add the URL part
-    core.debug(`Found URL in markdown link: ${match[2]}`);
-  }
-
-  // Find all Asana URLs
-  const asanaUrlRegex = /https:\/\/app\.asana\.com\/[^\s<>"()]+/g;
-  const allUrls: string[] = [];
-
-  while ((match = asanaUrlRegex.exec(text)) !== null) {
-    const url = match[0];
-    // Only include URLs that aren't already part of markdown links
-    if (!markdownUrls.has(url)) {
-      core.debug(`Found plain Asana URL: ${url}`);
-      allUrls.push(url);
-    }
-  }
-
-  core.info(`Found ${allUrls.length} plain Asana URLs (not in markdown links)`);
-  return allUrls;
-}
-
-/**
  * Normalize whitespace for comparison
  * @param text Text to normalize
  * @returns Normalized text
@@ -91,19 +56,28 @@ export async function unfurlAsanaUrls(): Promise<void> {
     // Create a working copy of the PR body
     let updatedBody = originalBody;
 
-    // Step 1: Process existing markdown links to Asana
-    core.info('🔍 Processing existing markdown links to Asana tasks');
-    const markdownLinkRegex = /\[([^\]]*)\][(](https:\/\/app\.asana\.com\/[^)]+)[)]/g;
-    const processedUrls = new Set<string>();
+    // Preprocess: First flatten all markdown links with Asana URLs to just the URLs
+    const markdownLinkRegex = /\[[^\]]*\][(](https:\/\/app\.asana\.com\/[^)]+)[)]/g;
+    updatedBody = updatedBody.replace(markdownLinkRegex, (match, asanaUrl) => {
+      return asanaUrl;
+    });
 
-    // Track all replacements to avoid duplicates
+    core.info('🔍 Flattened all Asana markdown links to plain URLs');
+
+    // Now process all Asana URLs (now they're all plain URLs)
+    const asanaUrlRegex = /https:\/\/app\.asana\.com\/[^\s<>"()]+/g;
+    const processedUrls = new Set<string>();
     const replacements: Array<{ original: string; replacement: string }> = [];
 
-    // First pass: Update existing markdown links
-    let markdownMatch;
-    while ((markdownMatch = markdownLinkRegex.exec(originalBody)) !== null) {
-      const [fullMatch, linkText, asanaUrl] = markdownMatch;
-      core.debug(`Found markdown link: [${linkText}](${asanaUrl})`);
+    let asanaMatch;
+    while ((asanaMatch = asanaUrlRegex.exec(updatedBody)) !== null) {
+      const asanaUrl = asanaMatch[0];
+
+      // Skip if we've already processed this URL
+      if (processedUrls.has(asanaUrl)) {
+        core.debug(`Skipping already processed URL: ${asanaUrl}`);
+        continue;
+      }
 
       const taskIds = getAsanaTaskGIDsFromText(asanaUrl);
 
@@ -111,7 +85,7 @@ export async function unfurlAsanaUrls(): Promise<void> {
         const taskId = taskIds[0];
         processedUrls.add(asanaUrl);
 
-        core.info(`📋 Found Asana task ID in markdown link: ${taskId}`);
+        core.info(`📋 Found Asana task ID: ${taskId}`);
 
         try {
           // Get the task title from Asana
@@ -121,51 +95,8 @@ export async function unfurlAsanaUrls(): Promise<void> {
 
           core.info(`📝 Task ${taskId} title: "${taskTitle}"`);
 
-          // Only update if the title has changed
-          if (linkText !== taskTitle) {
-            core.info(`🔄 Updating markdown link text from "${linkText}" to "${taskTitle}"`);
-            replacements.push({
-              original: fullMatch,
-              replacement: `[${taskTitle}](${asanaUrl})`,
-            });
-          } else {
-            core.info(`✅ Link text already matches task title: "${taskTitle}"`);
-          }
-        } catch (error) {
-          core.warning(
-            `⚠️ Failed to fetch Asana task ${taskId}: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      } else if (taskIds.length > 1) {
-        core.warning(`⚠️ Found multiple task IDs in a single URL, skipping: ${asanaUrl}`);
-      } else {
-        core.debug(`No valid Asana task ID found in URL: ${asanaUrl}`);
-      }
-    }
-
-    // Step 2: Find plain Asana URLs that aren't part of markdown links
-    core.info('🔍 Processing plain Asana URLs');
-    const plainUrlMatches = findPlainAsanaUrls(originalBody);
-
-    for (const asanaUrl of plainUrlMatches) {
-      // Skip URLs we've already processed
-      if (processedUrls.has(asanaUrl)) {
-        core.debug(`Skipping already processed URL: ${asanaUrl}`);
-        continue;
-      }
-
-      const taskIds = getAsanaTaskGIDsFromText(asanaUrl);
-      if (taskIds.length === 1) {
-        const taskId = taskIds[0];
-        core.info(`📋 Found Asana task ID in plain URL: ${taskId}`);
-
-        try {
-          // Get the task title from Asana
-          core.debug(`Fetching Asana task details for task ID: ${taskId}`);
-          const task = await asanaClient.tasks.getTask(taskId);
-          const taskTitle = task.name;
-
-          core.info(`📝 Converting plain URL to markdown link with title: "${taskTitle}"`);
+          // Convert to markdown link
+          core.info(`🔄 Converting URL to markdown link with title: "${taskTitle}"`);
           replacements.push({
             original: asanaUrl,
             replacement: `[${taskTitle}](${asanaUrl})`,
