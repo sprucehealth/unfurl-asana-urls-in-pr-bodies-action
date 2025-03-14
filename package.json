@@ -35,7 +35,7 @@
     "@types/asana": "^0.18.16",
     "@types/jest": "^27.5.2",
     "@types/node": "^22.5.4",
-    "@typescript-eslint/eslint-plugin": "^8.5.0",
+    "@typescript-eslint/eslint-plugin": "^8.26.1",
     "@typescript-eslint/parser": "^8.5.0",
     "@vercel/ncc": "^0.36.1",
     "eslint": "^8.57.0",
