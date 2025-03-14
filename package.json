@@ -1,0 +1,49 @@
+{
+  "name": "unfurl-asana-urls-in-pr-bodies-action",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Action to replace Asana URLs with markdown links containing task titles in PR bodies",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "format": "prettier --write '**/*.ts'",
+    "format-check": "prettier --check '**/*.ts'",
+    "lint": "eslint --config eslint.config.mjs src/**/*.ts",
+    "package": "ncc build src/main.ts --license licenses.txt --minify",
+    "all": "npm run build && npm run format && npm run lint && npm run package"
+  },
+  "keywords": [
+    "actions",
+    "node",
+    "setup",
+    "asana",
+    "markdown",
+    "pull-request"
+  ],
+  "author": "Jonathan Sibley",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/github": "^5.1.1",
+    "@octokit/rest": "^21.0.2",
+    "@types/github": "^7.1.0",
+    "asana": "^1.0.5"
+  },
+  "devDependencies": {
+    "@types/asana": "^0.18.16",
+    "@types/node": "^22.5.4",
+    "@typescript-eslint/eslint-plugin": "^8.5.0",
+    "@typescript-eslint/parser": "^8.5.0",
+    "@vercel/ncc": "^0.36.1",
+    "eslint": "^8.57.0",
+    "eslint-plugin-filenames": "^1.3.2",
+    "eslint-plugin-github": "^5.0.1",
+    "eslint-plugin-jest": "^28.8.3",
+    "eslint-plugin-prettier": "^5.2.1",
+    "jest": "^27.2.5",
+    "js-yaml": "^4.1.0",
+    "prettier": "^3.3.3",
+    "ts-jest": "^27.1.2",
+    "typescript": "^4.9.5"
+  }
+}

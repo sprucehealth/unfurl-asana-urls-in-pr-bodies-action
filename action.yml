@@ -1,0 +1,20 @@
+name: 'Unfurl Asana URLs in PR bodies'
+description: 'This action finds Asana URLs in PR bodies and replaces them with markdown links containing task titles'
+author: 'Jonathan Sibley'
+inputs:
+  githubToken:
+    required: true
+    description: 'GitHub token for PR access'
+    default: ''
+  asanaToken:
+    required: true
+    description: 'Asana API token for retrieving task information'
+    default: ''
+outputs:
+  updated:
+    description: 'Whether the PR body was updated (true) or not (false)'
+  updatedCount:
+    description: 'The number of Asana links that were processed and updated'
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
