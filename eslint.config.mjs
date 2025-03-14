@@ -22,6 +22,19 @@ export default [
       // Add any custom rules here
     },
   },
+  {
+    files: ['**/*.test.ts', '**/__tests__/**/*.ts'],
+    languageOptions: {
+      globals: {
+        jest: true,
+        describe: true,
+        test: true,
+        expect: true,
+        beforeEach: true,
+        afterEach: true,
+      },
+    },
+  },
   prettierConfig,
   {
     ignores: ['dist/**', 'lib/**', 'node_modules/**', 'jest.config.js'],
