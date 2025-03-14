@@ -11,7 +11,7 @@ jobs:
     name: 'Build Job' 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: |
           npm install
       - run: |
@@ -20,7 +20,7 @@ jobs:
     name: 'Make sure the action works on a clean machine without building' 
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./
         with:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
