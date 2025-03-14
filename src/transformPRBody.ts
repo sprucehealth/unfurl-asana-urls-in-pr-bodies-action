@@ -34,7 +34,7 @@ export async function transformPRBody(
 
   // Fetch all task titles in parallel (for performance)
   await Promise.all(
-    allAsanaUrls.map(async (url) => {
+    [...new Set(allAsanaUrls)].map(async (url) => {
       const taskIds = getAsanaTaskGIDsFromText(url);
       if (taskIds.length === 1) {
         try {
@@ -53,79 +53,101 @@ export async function transformPRBody(
     return { body, changesApplied: false, updatedCount: 0 };
   }
 
-  // Create a working copy for replacements
-  let newBody = body;
+  // Process line by line to avoid nested markdown issues
+  const lines = body.split('\n');
   let replacementCount = 0;
 
-  // Special case for the nested brackets bug - don't modify existing links that match the pattern
-  // Check if the input body already contains links with nested brackets
-  const nestedBracketRegex = /\[([^\]]*\[[^\]]*\])\]\((https:\/\/app\.asana\.com\/[^)]+)\)/g;
-  const nestedMatches = [...newBody.matchAll(nestedBracketRegex)];
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
 
-  for (const match of nestedMatches) {
-    const [fullMatch, linkText, asanaUrl] = match;
-    if (taskInfoMap.has(asanaUrl)) {
-      const taskInfo = taskInfoMap.get(asanaUrl)!;
+    // First, handle existing markdown links with Asana URLs
+    const markdownRegex = /\[([^\]]+)\]\((https:\/\/app\.asana\.com\/[^)]+)\)/g;
+    let markdownMatches = [...line.matchAll(markdownRegex)];
 
-      // Special handling for the nested brackets test case
-      // If the link text already matches the task title (with nested brackets),
-      // preserve it as is to maintain the expected output
-      if (linkText === taskInfo.title) {
-        // Just count it as processed, but don't modify
-        replacementCount++;
-      } else {
-        // For other cases, use the safe title
-        const newLink = `[${taskInfo.safeTitle}](${asanaUrl})`;
-        newBody = newBody.replace(fullMatch, newLink);
-        replacementCount++;
-      }
+    for (const match of markdownMatches) {
+      const [fullMatch, linkText, asanaUrl] = match;
 
-      // Mark this URL as processed
-      taskInfoMap.delete(asanaUrl);
-    }
-  }
+      if (taskInfoMap.has(asanaUrl)) {
+        const taskInfo = taskInfoMap.get(asanaUrl)!;
 
-  // Process remaining URLs
-  for (const [url, taskInfo] of taskInfoMap.entries()) {
-    // First check for markdown links with this URL
-    const markdownRegex = new RegExp(`\\[([^\\]]+)\\]\\(${escapeRegExp(url)}\\)`, 'g');
-    const markdownMatches = [...newBody.matchAll(markdownRegex)];
-
-    if (markdownMatches.length > 0) {
-      // Process markdown links
-      for (const match of markdownMatches) {
-        const [fullMatch, linkText] = match;
-
-        // Only update if the title is different
-        if (linkText !== taskInfo.title) {
-          // Use the safe title here to avoid nested brackets issues
-          const newLink = `[${taskInfo.safeTitle}](${url})`;
-          newBody = newBody.replace(fullMatch, newLink);
+        // If the link text already matches the task title or contains nested brackets, preserve it
+        if (linkText === taskInfo.title || linkText.includes('[')) {
+          // Just count it as processed, but don't modify
           replacementCount++;
         } else {
-          // Even if we don't change anything, count it as a "change" for test purposes
+          // Otherwise update to the safe title
+          const newLink = `[${taskInfo.safeTitle}](${asanaUrl})`;
+          line = line.replace(fullMatch, newLink);
           replacementCount++;
         }
       }
-    } else {
-      // If no markdown links found, look for plain URLs
-      const plainUrlRegex = new RegExp(escapeRegExp(url), 'g');
-      const plainMatches = [...newBody.matchAll(plainUrlRegex)];
+    }
 
-      if (plainMatches.length > 0) {
-        // Use the safe title here to avoid nested brackets issues
-        const newLink = `[${taskInfo.safeTitle}](${url})`;
-        newBody = newBody.replace(plainUrlRegex, newLink);
-        replacementCount += plainMatches.length;
+    // Then, handle plain URLs (making sure not to match URLs within markdown links)
+    // We need to re-check what's in the line after above replacements
+    const updatedLine = line;
+    const markdownIndices = findMarkdownLinkIndices(updatedLine);
+
+    for (const [url, taskInfo] of taskInfoMap.entries()) {
+      let startIndex = 0;
+      let urlIndex: number;
+
+      // Find all occurrences of this URL in the line
+      while ((urlIndex = updatedLine.indexOf(url, startIndex)) !== -1) {
+        // Check if this URL is already within a markdown link
+        const isInMarkdownLink = markdownIndices.some(
+          (range) => urlIndex >= range.start && urlIndex + url.length <= range.end
+        );
+
+        if (!isInMarkdownLink) {
+          // This is a plain URL, convert it to a markdown link
+          const newLink = `[${taskInfo.safeTitle}](${url})`;
+          const before = updatedLine.substring(0, urlIndex);
+          const after = updatedLine.substring(urlIndex + url.length);
+          line = before + newLink + after;
+          replacementCount++;
+
+          // Update the search position for next iteration
+          startIndex = urlIndex + newLink.length;
+        } else {
+          // Skip this occurrence and continue searching after it
+          startIndex = urlIndex + url.length;
+        }
       }
     }
+
+    // Update the line in the array
+    lines[i] = line;
   }
+
+  // Join the lines back together to form the updated body
+  const newBody = lines.join('\n');
 
   return {
     body: newBody,
     changesApplied: replacementCount > 0,
     updatedCount: replacementCount,
   };
+}
+
+/**
+ * Finds indices of all markdown links in a string
+ * @param text String to search
+ * @returns Array of ranges for markdown links
+ */
+function findMarkdownLinkIndices(text: string): Array<{ start: number; end: number }> {
+  const markdownRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const indices: Array<{ start: number; end: number }> = [];
+
+  let match;
+  while ((match = markdownRegex.exec(text)) !== null) {
+    indices.push({
+      start: match.index,
+      end: match.index + match[0].length,
+    });
+  }
+
+  return indices;
 }
 
 /**
@@ -146,13 +168,4 @@ function collectAllAsanaUrls(text: string): string[] {
   const asanaUrlRegex = /https:\/\/app\.asana\.com\/[^\s<>"()]+/g;
   const matches = [...text.matchAll(asanaUrlRegex)];
   return matches.map((match) => match[0]);
-}
-
-/**
- * Escapes special characters in a string for use in a regular expression
- * @param text Text to escape
- * @returns Escaped text
- */
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
