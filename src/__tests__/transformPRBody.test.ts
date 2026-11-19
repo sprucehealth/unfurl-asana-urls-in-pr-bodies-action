@@ -186,4 +186,19 @@ TBD
     expect(mockFetchTaskTitle).toHaveBeenCalledTimes(1);
     expect(mockFetchTaskTitle).toHaveBeenCalledWith('1209683713901029');
   });
+
+  test('should trim whitespace and newlines from task titles', async () => {
+    mockFetchTaskTitle.mockResolvedValue('Plans & Pricing: 360 width issue\n');
+
+    const input = 'Task:\n\nhttps://app.asana.com/1/7423375154038/project/1/task/789012\n\nNotes';
+    const result = await transformPRBody(input, mockFetchTaskTitle);
+
+    expect(result.body).toBe(
+      'Task:\n\n[Plans & Pricing: 360 width issue](https://app.asana.com/1/7423375154038/project/1/task/789012)\n\nNotes'
+    );
+
+    // A second run leaves the link as it is
+    const second = await transformPRBody(result.body, mockFetchTaskTitle);
+    expect(second.body).toBe(result.body);
+  });
 });

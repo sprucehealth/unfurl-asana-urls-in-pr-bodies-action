@@ -47,7 +47,9 @@ async function transformPRBody(body, fetchTaskTitle) {
             if (taskInfoMap.has(asanaUrl)) {
                 const taskInfo = taskInfoMap.get(asanaUrl);
                 // If the link text already matches the task title or contains nested brackets, preserve it
-                if (linkText === taskInfo.title || linkText.includes('[')) {
+                if (linkText === taskInfo.title ||
+                    linkText === taskInfo.safeTitle ||
+                    linkText.includes('[')) {
                     // Just count it as processed, but don't modify
                     replacementCount++;
                 }
@@ -121,7 +123,13 @@ function findMarkdownLinkIndices(text) {
  * @returns A sanitized version of the title safe for markdown links
  */
 function sanitizeTitleForMarkdown(title) {
-    return title.replace(/\[/g, '(').replace(/\]/g, ')');
+    // The body is processed line by line, so a newline in the title (Asana task names can end
+    // with one) would split the link and get it wrapped again on the next edit.
+    return title
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\[/g, '(')
+        .replace(/\]/g, ')');
 }
 /**
  * Collects all Asana URLs from a text
