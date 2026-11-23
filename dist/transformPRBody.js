@@ -125,11 +125,7 @@ function findMarkdownLinkIndices(text) {
 function sanitizeTitleForMarkdown(title) {
     // The body is processed line by line, so a newline in the title (Asana task names can end
     // with one) would split the link and get it wrapped again on the next edit.
-    return title
-        .replace(/\s+/g, ' ')
-        .trim()
-        .replace(/\[/g, '(')
-        .replace(/\]/g, ')');
+    return title.replace(/\s+/g, ' ').trim().replace(/\[/g, '(').replace(/\]/g, ')');
 }
 /**
  * Collects all Asana URLs from a text
